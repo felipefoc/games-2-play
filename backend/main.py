@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from models.users import User
-from models.games import Games
+#from models.games import Games
 import uvicorn
 import database
 # Router
@@ -10,15 +10,14 @@ from core.games import router as games_router
 from core.rawg import router as rawg_router
 from core.authentication import router as auth_router
 
-database.db.connect()
-database.db.create_tables([User, Games])
-database.db.close()
+database.Base.metadata.create_all(database.engine)
 
 app = FastAPI()
 
 origins = [
     "http://localhost",
     "http://localhost:5000",
+    "https://missa.serveo.net"
 ]
 
 app.add_middleware(

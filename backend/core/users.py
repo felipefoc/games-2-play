@@ -1,5 +1,7 @@
-from fastapi import APIRouter
-from models.users import User, UserBaseSchema, UserCreateSchema, UserListSchema
+from fastapi import APIRouter, Depends
+from models.users import User, UserCreateSchema, UserRetrieveSchema# UserListSchema
+from database import get_db
+from sqlalchemy.orm import Session
 from .authentication import bcrypt_context
 
 router = APIRouter(
@@ -7,18 +9,15 @@ router = APIRouter(
     tags=["user"]
 )
 
-@router.post("/", description="Create a simple user", status_code=201)
-async def create_user(user: UserCreateSchema) -> UserBaseSchema:
+@router.post("", description="Create a simple user", status_code=201)
+async def create_user(user: UserCreateSchema, db: Session = Depends(get_db)) -> UserRetrieveSchema:
     db_user = User(
         username=user.username,
         password=bcrypt_context.hash(user.password),
         is_active=True,
     )
-    db_user.save()
-    return UserBaseSchema(**db_user.to_dict())
+    return db_user.save(db)
 
-@router.get("/", description="List of registred users")
-async def get_users() -> UserListSchema:
-    db_query = User.select()
-    db_users = [UserBaseSchema(**user) for user in db_query.dicts()]
-    return UserListSchema(users=db_users)
+@router.get("", description="List of registred users")
+async def get_users(db: Session = Depends(get_db)) -> list[UserRetrieveSchema]:
+    return db.query(User).all()

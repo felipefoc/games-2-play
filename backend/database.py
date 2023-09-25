@@ -1,32 +1,21 @@
-from fastapi import applications
-import peewee
-from contextvars import ContextVar
-from traitlets import Any
-from pydantic.v1.utils import GetterDict
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
-DATABASE_NAME = "test.db"
-db_state_default = {"closed": None, "conn": None, "ctx": None, "transactions": None}
-db_state = ContextVar("db_state", default=db_state_default.copy())
+SQLALCHEMY_DATABASE_URL = os.getenv('DATABASE_URL')
 
-class PeeweeConnectionState(peewee._ConnectionState):
-    def __init__(self, **kwargs):
-        super().__setattr__("_state", db_state)
-        super().__init__(**kwargs)
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    def __setattr__(self, name, value):
-        self._state.get()[name] = value
+Base = declarative_base()
 
-    def __getattr__(self, name):
-        return self._state.get()[name]
-
-# Necessary for orm connections in BaseModels
-class PeeweeGetterDict(GetterDict):
-    def get(self, key: Any, default: Any = None):
-        res = getattr(self._obj, key, default)
-        if isinstance(res, peewee.ModelSelect):
-            return list(res)
-        return res
-    
-db = peewee.SqliteDatabase(DATABASE_NAME, check_same_thread=False)
-
-db._state = PeeweeConnectionState()
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

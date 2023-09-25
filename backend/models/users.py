@@ -1,59 +1,44 @@
 from datetime import timedelta
 from typing import List
-import peewee
-from playhouse.shortcuts import model_to_dict
 from pydantic import BaseModel, field_validator
-from database import db, PeeweeGetterDict
+from database import Base, SessionLocal
+from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy.orm import relationship, scoped_session, sessionmaker
 
+db = SessionLocal()
 
-class User(peewee.Model):
-    username = peewee.CharField(unique=True, index=True)
-    password = peewee.CharField(max_length=255)
-    is_active = peewee.BooleanField(default=True)
+class User(Base):
+    __tablename__ = 'users'
 
-    class Meta:
-        database = db
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, index=True)
+    password = Column(String(255))
+    is_active = Column(Boolean, default=True)
+
+    games = relationship("Games", back_populates="owner")
 
     def __str__(self) -> str:
         return self.username
     
-    def to_dict(self):
-        return model_to_dict(self)
-
-    def get_by_token(self, token):
-        return self.get_or_none(User.api_token==token)
+    def save(self, db):
+        db.add(self)
+        db.commit()
+        db.refresh(self)
+        return self
 
 
 class UserBaseSchema(BaseModel):
     username: str
-
-    class ConfigDict:
-        orm_mode = True
-        getter_dict = PeeweeGetterDict
     
+class UserRetrieveSchema(UserBaseSchema):
+    id: int
+
 class UserCreateSchema(UserBaseSchema):
     password: str
     
     @field_validator("username")
     def validate_username(cls, value):
-        if bool(User.get_or_none(User.username==value)):
+        if db.query(User).filter(User.username==value).one_or_none():
             raise ValueError(f"User with username '{value}' already exists")
         return value
-
-class UserListSchema(BaseModel):
-    users: List[UserBaseSchema]
-
-    class ConfigDict:
-        orm_mode = True
-        getter_dict = PeeweeGetterDict
-        
-
-class LoginSchema(UserBaseSchema):
-    password: str
-
-class UserCreateTokenSchema(UserBaseSchema):
-    id: int
-    expires: timedelta
-
-
     

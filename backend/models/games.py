@@ -1,60 +1,54 @@
-from .users import User
-from typing import Optional, List
+from enum import Enum
+from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, Field, validator, PositiveInt
-from database import db
-from playhouse.shortcuts import model_to_dict
-import peewee
+from database import Base
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 
-STATUS_CHOICES = (
-    (1, "Não iniciado"),
-    (2, "Em andamento"),
-    (3, "Zerado"),
-    (4, "Abondonado"),
-)
+class StatusChoices(Enum):
+    NOT_STARTED = "Não iniciado"
+    IN_PROGRESS = "Em andamento"
+    COMPLETED = "Zerado"
+    ABANDONED = "Abandonado"
 
-class Games(peewee.Model):
-    title = peewee.CharField()
-    photo = peewee.CharField()
-    added_on = peewee.DateTimeField(default=datetime.now)
-    finished_at = peewee.DateTimeField(null=True)
-    buyed = peewee.BooleanField(default=False)
-    owner = peewee.ForeignKeyField(User, backref="games")
-    status = peewee.IntegerField(choices=STATUS_CHOICES)
-
-    class Meta:
-        database = db
-        indexes = (
-                    (('title', 'owner'), True),
-                )
+class Games(Base):
+    __tablename__ = "games"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True, unique=True)
+    description = Column(String, index=True, nullable=True)
+    photo = Column(String)
+    added_on = Column(DateTime, server_default=func.now())
+    finished_at = Column(DateTime, nullable=True)
+    buyed = Column(Boolean, nullable=True, default=False)
+    owner_id = Column(ForeignKey("users.id"))
+    owner = relationship("User", back_populates="games")
+    status = Column(String)
 
     @property
     def is_finished(self):
         return bool(self.finished_at)
     
-    def to_dict(self):
-        return model_to_dict(self)
+    def save(self, db):
+        db.add(self)
+        db.commit()
+        db.refresh(self)
+        return self
 
-class _GameBaseSchema(BaseModel):
-    title: str
-    photo: str
-    added_on: datetime = Field(default_factory=datetime.now)
-    finished_at: Optional[datetime]
-    buyed: bool = False
-    owner: PositiveInt
-    status: int
 
 class GameBaseSchema(BaseModel):
     title: str
     photo: str
     added_on: datetime = Field(default_factory=datetime.now)
-    status: int
+    status: Optional[str] = None
 
-class GameCreateSchema(BaseModel):
-    title: str
-    photo: str
-    added_on: datetime = Field(default_factory=datetime.now)
-    status: Optional[int] = None
+class GameCreateSchema(GameBaseSchema):
+    ...
 
-class ListGameBaseSchema(BaseModel):
-    games: List[GameBaseSchema]
+class GameRetrieveSchema(GameBaseSchema):
+    id: int
+
+
+# class ListGameBaseSchema(BaseModel):
+#     games: List[GameBaseSchema]
